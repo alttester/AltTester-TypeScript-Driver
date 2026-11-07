@@ -1,2 +1,5 @@
-// Public surface of the AltTester driver package. Filled in by the protocol units.
-export {};
+// Public surface of the AltTester driver package (KTD10).
+export * from './AltSocket';
+export * from './closeCodes';
+export * from './connectionUrl';
+export * from './socketTypes';
