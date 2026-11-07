@@ -2,6 +2,7 @@
 export * from './AltSocket';
 export * from './AppListSocket';
 export * from './closeCodes';
+export * from './errors';
 export * from './commands';
 export * from './connectionUrl';
 export * from './coordinates';
