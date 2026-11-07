@@ -19,7 +19,7 @@ await driver.stop();
 This repository is private and the package is not on the public npm registry. Install it from a tag:
 
 ```bash
-npm install "github:alttester/AltTester-TypeScript-Driver#v0.2.0"
+npm install "github:alttester/AltTester-TypeScript-Driver#v0.2.1"
 ```
 
 npm builds `dist/` on install (`prepare`). It needs read access to this repository: an SSH key locally, a

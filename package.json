@@ -1,36 +1,68 @@
 {
   "name": "@alttester/driver",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "AltTester(R) driver for TypeScript/JavaScript (Node 22+ and browsers): the binding API plus the low-level protocol client.",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/alttester/AltTester-TypeScript-Driver.git"
   },
-  "keywords": ["alttester", "unity", "unreal", "test-automation", "game-testing"],
+  "keywords": [
+    "alttester",
+    "unity",
+    "unreal",
+    "test-automation",
+    "game-testing"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./protocol": {
-      "import": { "types": "./dist/protocol.d.ts", "default": "./dist/protocol.js" },
-      "require": { "types": "./dist/protocol.d.cts", "default": "./dist/protocol.cjs" }
+      "import": {
+        "types": "./dist/protocol.d.ts",
+        "default": "./dist/protocol.js"
+      },
+      "require": {
+        "types": "./dist/protocol.d.cts",
+        "default": "./dist/protocol.cjs"
+      }
     },
     "./node": {
-      "import": { "types": "./dist/node.d.ts", "default": "./dist/node.js" },
-      "require": { "types": "./dist/node.d.cts", "default": "./dist/node.cjs" }
+      "import": {
+        "types": "./dist/node.d.ts",
+        "default": "./dist/node.js"
+      },
+      "require": {
+        "types": "./dist/node.d.cts",
+        "default": "./dist/node.cjs"
+      }
     },
     "./testing": {
-      "import": { "types": "./dist/testing.d.ts", "default": "./dist/testing.js" },
-      "require": { "types": "./dist/testing.d.cts", "default": "./dist/testing.cjs" }
+      "import": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/testing.js"
+      },
+      "require": {
+        "types": "./dist/testing.d.cts",
+        "default": "./dist/testing.cjs"
+      }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -43,7 +75,8 @@
     "prepare": "npm run build",
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "ws": "^8.18.0"
