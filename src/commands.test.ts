@@ -279,6 +279,20 @@ describe('AltDriver input and time', () => {
     socket.close();
   });
 
+  it('getTimeScale parses the string the Unreal SDK sends ("1.0")', async () => {
+    const { server, socket, driver } = await setup('unreal');
+    server.on('getTimeScale', () => [{ data: '1.0' }]);
+    expect(await driver.getTimeScale()).toBe(1);
+    socket.close();
+  });
+
+  it('getTimeScale rejects a reply that is not a number', async () => {
+    const { server, socket, driver } = await setup();
+    server.on('getTimeScale', () => [{ data: 'fast' }]);
+    await expect(driver.getTimeScale()).rejects.toBeInstanceOf(AltError);
+    socket.close();
+  });
+
   it('getAllActiveCameras returns AltObjects', async () => {
     const { server, socket, driver } = await setup();
     server.on('getAllActiveCameras', () => [{ data: [obj] }]);
@@ -324,6 +338,7 @@ describe('wire command names', () => {
     server.on('tapCoordinates', () => [{ data: 'Ok' }, { data: 'Finished' }]);
     server.on('pressKeyboardKeys', () => [{ data: 'Ok' }, { data: 'Finished' }]);
     server.on('beginTouch', () => [{ data: 0 }]);
+    server.on('getTimeScale', () => [{ data: 1 }]);
 
     const p = { x: 1, y: 1 };
     await driver.getAllLoadedScenesAndObjects();

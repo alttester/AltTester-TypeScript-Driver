@@ -202,8 +202,12 @@ export class AltDriver {
     await this.send('setTimeScale', { timeScale }, { kind: 'input' });
   }
 
-  getTimeScale(): Promise<number> {
-    return this.send('getTimeScale');
+  /** Unity replies with a number; Unreal replies with a string such as "1.0". */
+  async getTimeScale(): Promise<number> {
+    const raw = await this.send<number | string>('getTimeScale');
+    const value = typeof raw === 'number' ? raw : Number.parseFloat(raw);
+    if (!Number.isFinite(value)) throw new AltError('invalidResponse', `getTimeScale returned ${JSON.stringify(raw)}`);
+    return value;
   }
 
   // ---- internals ----
