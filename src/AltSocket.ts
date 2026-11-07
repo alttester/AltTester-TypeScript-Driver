@@ -87,6 +87,8 @@ interface InFlight {
 
 interface Frame {
   messageId?: string | null;
+  /** The id the server gave this driver connection; set on command replies, null on driverRegistered. */
+  driverId?: string | null;
   commandName?: string;
   isNotification?: boolean;
   data?: string | null;
@@ -124,6 +126,7 @@ export class AltSocket {
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private _paused = false;
   private _serverVersion = '';
+  private _driverId: string | null = null;
 
   private constructor(
     private readonly ws: WebSocketLike,
@@ -144,6 +147,14 @@ export class AltSocket {
 
   get serverVersion(): string {
     return this._serverVersion;
+  }
+
+  /**
+   * The server's id for this driver connection, the same id the server lists it under (a Tags entry's
+   * DriverId). Known once the first command reply arrives, so always set after `connect` resolves.
+   */
+  get driverId(): string | null {
+    return this._driverId;
   }
 
   /** True while the app reports it is in the background. */
@@ -292,6 +303,7 @@ export class AltSocket {
   }
 
   private handleFrame(frame: Frame): void {
+    if (!this._driverId && typeof frame.driverId === 'string' && frame.driverId) this._driverId = frame.driverId;
     if (frame.isNotification) {
       const name = frame.commandName ?? '';
       const data = parseData(frame.data);

@@ -31,6 +31,8 @@ export class FakeSocket implements WebSocketLike {
   readonly sent: string[] = [];
   readonly path: string;
   readonly query: URLSearchParams;
+  /** The id the fake server gives this connection in its replies, unique per socket. */
+  readonly driverId: string;
 
   constructor(
     readonly url: string,
@@ -40,6 +42,7 @@ export class FakeSocket implements WebSocketLike {
     this.path = parsed.pathname;
     this.query = parsed.searchParams;
     server.sockets.push(this);
+    this.driverId = `d${server.sockets.length}`;
     setTimeout(() => server.accept(this), 0);
   }
 
@@ -73,13 +76,13 @@ export class FakeSocket implements WebSocketLike {
   }
 
   notify(commandName: string, data: unknown): void {
-    this.push({ messageId: null, driverId: 'd1', commandName, isNotification: true, data: JSON.stringify(data), error: null });
+    this.push({ messageId: null, driverId: this.driverId, commandName, isNotification: true, data: JSON.stringify(data), error: null });
   }
 
   reply(cmd: ReceivedCommand, r: FakeReply): void {
     this.push({
       messageId: cmd.messageId,
-      driverId: 'd1',
+      driverId: this.driverId,
       commandName: cmd.commandName,
       isNotification: false,
       error: r.error ? { trace: '', ...r.error } : null,

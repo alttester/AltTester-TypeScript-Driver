@@ -36,6 +36,13 @@ describe('AltSocket connect', () => {
     socket.close();
   });
 
+  it('learns its driver id from the first command reply', async () => {
+    const server = new FakeAltServer();
+    const socket = await AltSocket.connect(opts(server));
+    expect(socket.driverId).toBe(server.last().driverId);
+    socket.close();
+  });
+
   it('double-parses the data string: "\\"2.3.3\\"" resolves "2.3.3"', async () => {
     const server = new FakeAltServer({ serverVersion: '2.3.3' });
     const socket = await AltSocket.connect(opts(server));
