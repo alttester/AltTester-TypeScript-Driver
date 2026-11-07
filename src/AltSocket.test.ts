@@ -148,14 +148,40 @@ describe('AltSocket commands', () => {
     socket.close();
   });
 
-  it('collapses three queued identical getAllLoadedScenesAndObjects into one wire call', async () => {
+  it('three synchronous identical reads: the first goes on the wire, the next two collapse into one more wire call', async () => {
     const server = new FakeAltServer();
-    server.on('getAllLoadedScenesAndObjects', () => [{ data: [{ name: 'Main', id: 0 }] }]);
+    let n = 0;
+    server.on('getAllLoadedScenesAndObjects', () => [{ data: [{ name: 'Main', id: ++n }] }]);
     const socket = await AltSocket.connect(opts(server));
     const req = { commandName: 'getAllLoadedScenesAndObjects', params: { path: '//*', cameraBy: 2, cameraPath: '//*', enabled: true } };
     const results = await Promise.all([socket.send(req), socket.send(req), socket.send(req)]);
-    expect(server.commandsNamed('getAllLoadedScenesAndObjects')).toHaveLength(1);
-    expect(results[0]).toEqual(results[2]);
+    expect(server.commandsNamed('getAllLoadedScenesAndObjects')).toHaveLength(2);
+    expect(results[0]).toEqual([{ name: 'Main', id: 1 }]);
+    expect(results[1]).toEqual([{ name: 'Main', id: 2 }]);
+    expect(results[1]).toEqual(results[2]);
+    socket.close();
+  });
+
+  it('does not collapse a read onto an identical read already in flight', async () => {
+    const server = new FakeAltServer();
+    const cmds: Parameters<Parameters<FakeAltServer['on']>[1]>[0][] = [];
+    server.on('getAllLoadedScenesAndObjects', (cmd) => {
+      cmds.push(cmd);
+      return 'silent';
+    });
+    const socket = await AltSocket.connect(opts(server));
+    const req = { commandName: 'getAllLoadedScenesAndObjects', params: { path: '//*', cameraBy: 2, cameraPath: '//*', enabled: true } };
+    const first = socket.send(req);
+    await flush(5);
+    expect(cmds).toHaveLength(1);
+    const second = socket.send(req);
+    await flush(5);
+    server.last().reply(cmds[0], { data: [{ name: 'Before', id: 0 }] });
+    expect(await first).toEqual([{ name: 'Before', id: 0 }]);
+    await flush(5);
+    expect(server.commandsNamed('getAllLoadedScenesAndObjects')).toHaveLength(2);
+    server.last().reply(cmds[1], { data: [{ name: 'After', id: 1 }] });
+    expect(await second).toEqual([{ name: 'After', id: 1 }]);
     socket.close();
   });
 

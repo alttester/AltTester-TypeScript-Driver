@@ -160,7 +160,9 @@ export class AltSocket {
     const kind = req.kind ?? 'read';
     const key = kind === 'read' ? `${req.commandName}|${JSON.stringify(req.params ?? {})}|${req.responses ?? 1}` : null;
     return new Promise<T>((resolve, reject) => {
-      const tail = this.queue.length ? this.queue[this.queue.length - 1] : this.inFlight?.item;
+      // Collapse only onto the last *queued* command, never the one already on the wire:
+      // its response may predate a change (e.g. a scene load) that triggered this read.
+      const tail = this.queue[this.queue.length - 1];
       if (key && tail && tail.key === key && !req.select && !tail.req.select) {
         tail.shared.push({ resolve: resolve as (v: unknown) => void, reject });
         return;
