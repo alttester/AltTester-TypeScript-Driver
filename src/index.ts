@@ -8,6 +8,7 @@ export * from './coordinates';
 export * from './engine';
 export * from './hierarchy';
 export * from './keyCodes';
+export * from './LiveUpdateSocket';
 export * from './sdkVersions';
 export * from './socketTypes';
 export * from './types';
