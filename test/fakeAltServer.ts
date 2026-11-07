@@ -116,7 +116,31 @@ export interface FakeAltServerOptions {
   serverVersion?: string;
   /** Paths this server does not serve (an older AltServer); the handshake fails as unreachable. */
   missingPaths?: string[];
+  /** Serve only this scheme; a socket on the other one fails its handshake like a missing path. */
+  scheme?: 'ws' | 'wss';
+  /** With `scheme`, a socket on the other scheme never finishes opening (a TLS handshake to a plain server). */
+  stallWrongScheme?: boolean;
+  /** The `data` of the desktopHandshake frame sent on /altws/desktop; null sends none. */
+  desktopHandshake?: Record<string, unknown> | null;
 }
+
+/** A /altws/desktop command other than getConnectedApps. */
+export interface DesktopCommand {
+  commandName: string;
+  data?: Record<string, unknown>;
+}
+
+export const DEFAULT_DESKTOP_HANDSHAKE = {
+  protocolVersion: 1,
+  licenseType: 'PREMIUM',
+  gameEngine: 'ALL',
+  noOfAppConnection: 5,
+  noOfDriverConnection: 3,
+  noOfMCPDriverConnection: 3,
+  noOfCLIDriverConnection: 3,
+  capabilityTags: [],
+  productId: 1,
+};
 
 /**
  * Answers the startup sequence by default (getServerVersion, activateNotification). Tests add handlers
@@ -127,8 +151,13 @@ export class FakeAltServer {
   readonly sockets: FakeSocket[] = [];
   readonly closedByClient: { socket: FakeSocket; code: number }[] = [];
   private readonly handlers = new Map<string, CommandHandler>();
-  /** Text frames received on the app-list endpoints (/altws/connected-app-cli, /altws/connected-app) and /altws/live-update. */
+  /**
+   * List requests on the app-list endpoints. The read-only ones (/altws/connected-app-cli,
+   * /altws/connected-app) pass their raw text; /altws/desktop's getConnectedApps arrives as 'GetApps'.
+   */
   appListHandler: ((socket: FakeSocket, text: string) => void) | null = null;
+  /** Other /altws/desktop commands (disconnectApp, disconnectDriver, ...). */
+  desktopHandler: ((socket: FakeSocket, cmd: DesktopCommand) => void) | null = null;
   liveHandler: ((socket: FakeSocket, text: string) => void) | null = null;
 
   constructor(public options: FakeAltServerOptions = {}) {
@@ -166,7 +195,9 @@ export class FakeAltServer {
 
   accept(socket: FakeSocket): void {
     if (socket.readyState !== CONNECTING) return;
-    if (this.options.missingPaths?.includes(socket.path)) {
+    const wrongScheme = this.options.scheme && !socket.url.startsWith(`${this.options.scheme}://`);
+    if (wrongScheme && this.options.stallWrongScheme) return;
+    if (wrongScheme || this.options.missingPaths?.includes(socket.path)) {
       socket.serverClose(1006);
       return;
     }
@@ -178,12 +209,24 @@ export class FakeAltServer {
       return;
     }
     socket.open();
+    if (socket.path === '/altws/desktop' && this.options.desktopHandshake !== null) {
+      socket.push({
+        commandName: 'desktopHandshake',
+        isNotification: true,
+        data: this.options.desktopHandshake ?? DEFAULT_DESKTOP_HANDSHAKE,
+      });
+    }
     if (this.options.register !== false) socket.sendDriverRegistered();
   }
 
   receive(socket: FakeSocket, text: string): void {
     if (socket.path === '/altws/connected-app-cli' || socket.path === '/altws/connected-app') return this.appListHandler?.(socket, text);
     if (socket.path === '/altws/live-update') return this.liveHandler?.(socket, text);
+    if (socket.path === '/altws/desktop') {
+      const desktopCmd = JSON.parse(text) as DesktopCommand;
+      if (desktopCmd.commandName === 'getConnectedApps') return this.appListHandler?.(socket, 'GetApps');
+      return this.desktopHandler?.(socket, desktopCmd);
+    }
     const cmd = JSON.parse(text) as ReceivedCommand;
     const handler = this.handlers.get(cmd.commandName);
     const result = handler ? handler(cmd, socket) : undefined;

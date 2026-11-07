@@ -22,6 +22,9 @@ export type CloseKind =
   | 'handshakeFailed'
   | 'cryptoError'
   | 'disconnectedByDesktop'
+  | 'requiresSecure'
+  | 'notSecure'
+  | 'unresponsive'
   | 'normal'
   | 'unknown';
 
@@ -89,3 +92,30 @@ export function formatClose(info: CloseInfo): string {
   const reason = info.serverReason.trim();
   return reason && !info.message.includes(reason) ? `${info.message} Server said: ${reason}` : info.message;
 }
+
+/**
+ * The server answered on the other scheme (Desktop's ServerProtocolProbe messages): a ws/wss mix-up,
+ * not a server that is down.
+ */
+export const secureMismatch = (triedSecure: boolean): CloseInfo =>
+  triedSecure
+    ? {
+        code: 1006,
+        kind: 'notSecure',
+        message: "The server at that address doesn't accept secure (WSS) connections. Turn Secure off and connect again.",
+        serverReason: '',
+      }
+    : {
+        code: 1006,
+        kind: 'requiresSecure',
+        message: 'The server at that address only accepts secure (WSS) connections. Turn Secure on and connect again.',
+        serverReason: '',
+      };
+
+/** The socket is still open but the server stopped replying to the list requests. */
+export const serverStoppedAnswering = (): CloseInfo => ({
+  code: 1006,
+  kind: 'unresponsive',
+  message: 'The server stopped answering. Check that AltTester® Server is still running, then connect again.',
+  serverReason: '',
+});
