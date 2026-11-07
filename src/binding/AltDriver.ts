@@ -141,6 +141,11 @@ function toNumber(v: unknown, what: string): number {
   return n;
 }
 
+/** Formats a value the way Python's str() shows it in messages: strings and numbers bare, the rest as JSON. */
+function plain(v: unknown): string {
+  return typeof v === 'string' || typeof v === 'number' || typeof v === 'bigint' ? String(v) : JSON.stringify(v);
+}
+
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
@@ -650,7 +655,15 @@ export class AltDriver {
   }
 
   /** @internal Polls `fetch` until it equals `expected` (comparison rules of the Python binding). */
-  async _waitForValue<T>(fetch: () => Promise<T>, expected: T, asString: boolean, timeout: number | undefined, interval: number, label: string): Promise<T> {
+  async _waitForValue<T>(
+    fetch: () => Promise<T>,
+    expected: T,
+    asString: boolean,
+    timeout: number | undefined,
+    interval: number,
+    label: string,
+    propertyName: string,
+  ): Promise<T> {
     const limit = this.waitTimeout(timeout);
     const deadline = Date.now() + limit * 1000;
     const squash = (v: unknown) => String(v).replace(/\s/g, '');
@@ -671,7 +684,8 @@ export class AltDriver {
       await sleep(interval);
     }
     if (lastError) throw new WaitTimeOutException(`After ${limit} seconds, exception was: ${errorText(lastError)} for ${label}`);
-    throw new WaitTimeOutException(`${label} was ${JSON.stringify(found)}, not ${JSON.stringify(expected)} as expected, after ${limit} seconds`);
+    // Same wording as the Python binding: "Property <name> was <found>, not <expected> as expected, after <n> seconds".
+    throw new WaitTimeOutException(`Property ${propertyName} was ${plain(found)}, not ${plain(expected)} as expected, after ${limit} seconds`);
   }
 
   // ---- private ----

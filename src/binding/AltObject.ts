@@ -138,6 +138,7 @@ export class AltObject implements AltObjectData {
       timeout,
       interval,
       `component: ${componentName} and property ${propertyName}`,
+      propertyName,
     );
   }
 
@@ -218,6 +219,7 @@ export class AltObject implements AltObjectData {
       timeout,
       interval,
       `visual element property ${propertyName}`,
+      propertyName,
     );
   }
 
