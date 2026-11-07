@@ -2,21 +2,28 @@
   "name": "@alttester/driver",
   "private": true,
   "version": "0.1.0",
-  "description": "Framework-free TypeScript client for the AltTester driver protocol (browser and Node 22+).",
+  "description": "AltTester(R) driver for TypeScript/JavaScript (Node 22+ and browsers): the binding API plus the low-level protocol client.",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./binding": "./src/binding/index.ts",
+    "./node": "./src/node/index.ts",
     "./testing": "./test/fakeAltServer.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsup && node scripts/write-dist-package.mjs",
+    "test:live": "vitest run --config vitest.live.config.ts"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
     "@types/ws": "^8.5.12",
+    "tsup": "^8.3.5"
+  },
+  "dependencies": {
     "ws": "^8.18.0"
   }
 }
