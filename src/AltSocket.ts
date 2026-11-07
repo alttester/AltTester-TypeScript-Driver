@@ -3,7 +3,8 @@
 // (AltDriverController.cs): one command in flight, FIFO, consecutive duplicate reads collapse,
 // 60 s timeout, reads retried up to twice on timeout, inputs never retried.
 
-import { closedByClient, connectFailed, describeClose, formatClose, type CloseInfo } from './closeCodes';
+import { closedByClient, connectFailed, describeClose, type CloseInfo } from './closeCodes';
+import { AltTimeoutError, createAltError, createConnectionError } from './errors';
 import { buildConnectionUrl, type AppSelector, type ServerAddress } from './connectionUrl';
 import { defaultWebSocket, WS_OPEN, type WebSocketCtor, type WebSocketLike } from './socketTypes';
 
@@ -18,6 +19,12 @@ export interface ConnectOptions extends ServerAddress, AppSelector {
   maxRetries?: number;
   /** Interval for a liveness `getServerVersion` while idle; 0 disables (default). */
   heartbeatMs?: number;
+  /** NotificationType values activated after registration (default [0, 1, 3], as Desktop does). */
+  startupNotifications?: readonly number[];
+  /** Merge a read into an identical read still waiting in the queue (default true). */
+  collapseReads?: boolean;
+  /** Pause after each command settles before sending the next (default 0). */
+  delayAfterCommandMs?: number;
 }
 
 export type CommandKind = 'read' | 'input';
@@ -43,30 +50,8 @@ export type NotificationName =
 /** NotificationType values for activateNotification (LOADSCENE, UNLOADSCENE, APPLICATION_PAUSED). */
 const STARTUP_NOTIFICATIONS = [0, 1, 3];
 
-export class AltError extends Error {
-  constructor(
-    readonly type: string,
-    message: string,
-    readonly trace = '',
-  ) {
-    super(message);
-    this.name = 'AltError';
-  }
-}
-
-export class AltTimeoutError extends Error {
-  constructor(readonly commandName: string, timeoutMs: number) {
-    super(`${commandName} got no reply within ${Math.round(timeoutMs / 1000)} s.`);
-    this.name = 'AltTimeoutError';
-  }
-}
-
-export class AltConnectionError extends Error {
-  constructor(readonly info: CloseInfo) {
-    super(formatClose(info));
-    this.name = 'AltConnectionError';
-  }
-}
+// Moved to errors.ts; re-exported here for existing imports.
+export { AltConnectionError, AltError, AltTimeoutError } from './errors';
 
 interface QueueItem {
   req: CommandRequest<unknown>;
@@ -130,7 +115,9 @@ export class AltSocket {
 
   private constructor(
     private readonly ws: WebSocketLike,
-    private readonly options: Required<Pick<ConnectOptions, 'commandTimeoutMs' | 'maxRetries'>>,
+    private readonly options: Required<
+      Pick<ConnectOptions, 'commandTimeoutMs' | 'maxRetries' | 'startupNotifications' | 'collapseReads' | 'delayAfterCommandMs'>
+    >,
   ) {}
 
   /** Opens the socket, waits for registration, and runs the startup sequence. */
@@ -141,8 +128,28 @@ export class AltSocket {
     const socket = new AltSocket(ws, {
       commandTimeoutMs: opts.commandTimeoutMs ?? 60_000,
       maxRetries: opts.maxRetries ?? 2,
+      startupNotifications: opts.startupNotifications ?? STARTUP_NOTIFICATIONS,
+      collapseReads: opts.collapseReads ?? true,
+      delayAfterCommandMs: opts.delayAfterCommandMs ?? 0,
     });
     return socket.start(opts.registerTimeoutMs ?? 5_000, opts.heartbeatMs ?? 0);
+  }
+
+  /** Per-command response timeout in ms; applies to commands sent after the change. */
+  get commandTimeoutMs(): number {
+    return this.options.commandTimeoutMs;
+  }
+
+  set commandTimeoutMs(ms: number) {
+    this.options.commandTimeoutMs = ms;
+  }
+
+  get delayAfterCommandMs(): number {
+    return this.options.delayAfterCommandMs;
+  }
+
+  set delayAfterCommandMs(ms: number) {
+    this.options.delayAfterCommandMs = Math.max(0, ms);
   }
 
   get serverVersion(): string {
@@ -167,9 +174,9 @@ export class AltSocket {
   }
 
   send<T = unknown>(req: CommandRequest<T>): Promise<T> {
-    if (this.closeInfo) return Promise.reject(new AltConnectionError(this.closeInfo));
+    if (this.closeInfo) return Promise.reject(createConnectionError(this.closeInfo));
     const kind = req.kind ?? 'read';
-    const key = kind === 'read' ? `${req.commandName}|${JSON.stringify(req.params ?? {})}|${req.responses ?? 1}` : null;
+    const key = kind === 'read' && this.options.collapseReads ? `${req.commandName}|${JSON.stringify(req.params ?? {})}|${req.responses ?? 1}` : null;
     return new Promise<T>((resolve, reject) => {
       // Collapse only onto the last *queued* command, never the one already on the wire:
       // its response may predate a change (e.g. a scene load) that triggered this read.
@@ -219,7 +226,7 @@ export class AltSocket {
       let registerTimer: ReturnType<typeof setTimeout> | null = null;
       const fail = (info: CloseInfo) => {
         if (registerTimer) clearTimeout(registerTimer);
-        reject(new AltConnectionError(info));
+        reject(createConnectionError(info));
       };
 
       this.ws.binaryType = 'arraybuffer';
@@ -290,7 +297,7 @@ export class AltSocket {
 
   private async runStartup(): Promise<void> {
     this._serverVersion = String(await this.send<string>({ commandName: 'getServerVersion' }));
-    for (const type of STARTUP_NOTIFICATIONS) {
+    for (const type of this.options.startupNotifications) {
       await this.send({ commandName: 'activateNotification', params: { NotificationType: type }, kind: 'input' });
     }
   }
@@ -324,7 +331,7 @@ export class AltSocket {
 
     if (frame.error) {
       this.finish(current, () => {
-        const err = new AltError(frame.error!.type, frame.error!.message, frame.error!.trace ?? '');
+        const err = createAltError(frame.error!.type, frame.error!.message, frame.error!.trace ?? '');
         this.settle(current.item, err, true);
       });
       return;
@@ -348,7 +355,13 @@ export class AltSocket {
     clearTimeout(current.timer);
     this.inFlight = null;
     then();
-    this.pump();
+    this.pumpAfterDelay();
+  }
+
+  private pumpAfterDelay(): void {
+    const delay = this.options.delayAfterCommandMs;
+    if (delay > 0) setTimeout(() => this.pump(), delay);
+    else this.pump();
   }
 
   private settle(item: QueueItem, value: unknown, isError: boolean): void {
@@ -391,7 +404,7 @@ export class AltSocket {
   }
 
   private rejectAll(info: CloseInfo): void {
-    const err = new AltConnectionError(info);
+    const err = createConnectionError(info);
     if (this.inFlight) {
       clearTimeout(this.inFlight.timer);
       this.settle(this.inFlight.item, err, true);

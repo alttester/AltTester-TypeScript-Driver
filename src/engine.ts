@@ -19,8 +19,30 @@ export function normalizeEngine(tag: string | null | undefined): GameEngine {
   return t === 'unity' || t === 'unreal' ? t : 'unknown';
 }
 
-/** Commands the Unreal SDK does not implement (AltTesterRuntimeHandler.cpp). */
-const UNITY_ONLY = new Set(['getAllFields', 'getAllVisualElementProperty', 'findObjectsLight', 'getAllCameras']);
+/**
+ * Commands the Unreal SDK does not implement (AltTesterRuntimeHandler.cpp dispatch, Unreal SDK 1.2.x).
+ * `unloadScene` has an executor there but is not wired into the dispatch.
+ */
+const UNITY_ONLY = new Set([
+  'getAllFields',
+  'getAllVisualElementProperty',
+  'getVisualElementProperty',
+  'findObjectsLight',
+  'getAllCameras',
+  'unloadScene',
+  'scroll',
+  'tilt',
+  'resetInput',
+  'setServerLogging',
+  'pointerDownFromObject',
+  'pointerUpFromObject',
+  'pointerEnterObject',
+  'pointerExitObject',
+  'getKeyPlayerPref',
+  'setKeyPlayerPref',
+  'deleteKeyPlayerPref',
+  'deletePlayerPref',
+]);
 
 /** Unknown engines are treated like Unreal: we cannot rule out an app that never replies. */
 export function isCommandAvailable(engine: GameEngine, commandName: string): boolean {
