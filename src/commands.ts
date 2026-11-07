@@ -54,8 +54,9 @@ export class AltDriver {
   // ---- hierarchy and objects ----
 
   /** Flat depth-first rows; `enabled: true` returns active objects only. */
-  getAllLoadedScenesAndObjects(enabled = true): Promise<AltObjectLight[]> {
-    return this.send('getAllLoadedScenesAndObjects', this.findParams(ALL_PATH, enabled));
+  async getAllLoadedScenesAndObjects(enabled = true): Promise<AltObjectLight[]> {
+    const rows = await this.send<Record<string, unknown>[]>('getAllLoadedScenesAndObjects', this.findParams(ALL_PATH, enabled));
+    return rows.map(normalizeLightObject);
   }
 
   /** Finds an object by id (pass transformId for UIToolkit elements, as Desktop does). */
@@ -236,3 +237,13 @@ export class AltDriver {
     }
   }
 }
+
+/**
+ * The Unreal SDK serializes the light object through Unreal's JSON converter, which writes the id as
+ * "iD" and has no "type" field. Desktop's C# reader ignores key case, so it never noticed.
+ */
+export function normalizeLightObject(row: Record<string, unknown>): AltObjectLight {
+  const { iD, ...r } = row as Partial<AltObjectLight> & { iD?: number };
+  return { ...r, id: r.id ?? iD ?? 0, type: r.type ?? '' } as AltObjectLight;
+}
+

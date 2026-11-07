@@ -46,9 +46,18 @@ describe('AltDriver find-type commands', () => {
     const { server, socket, driver } = await setup();
     server.on('getAllLoadedScenesAndObjects', () => [{ data: [{ name: 'Main', id: 0, transformId: 0 }] }]);
     const rows = await driver.getAllLoadedScenesAndObjects();
-    expect(rows).toEqual([{ name: 'Main', id: 0, transformId: 0 }]);
+    expect(rows).toEqual([{ name: 'Main', id: 0, transformId: 0, type: '' }]);
     const [cmd] = server.commandsNamed('getAllLoadedScenesAndObjects');
     expect(cmd).toMatchObject({ path: '//*', cameraBy: 2, cameraPath: '//*', enabled: true });
+    socket.close();
+  });
+
+  it('getAllLoadedScenesAndObjects reads the "iD" key the Unreal SDK sends', async () => {
+    const { server, socket, driver } = await setup('unreal');
+    const row = { name: 'ButtonBorder', iD: 39583, enabled: true, idCamera: 0, transformParentId: 39579, transformId: 39583 };
+    server.on('getAllLoadedScenesAndObjects', () => [{ data: [row] }]);
+    const [got] = await driver.getAllLoadedScenesAndObjects();
+    expect(got).toEqual({ name: 'ButtonBorder', id: 39583, enabled: true, idCamera: 0, transformParentId: 39579, transformId: 39583, type: '' });
     socket.close();
   });
 
@@ -339,6 +348,7 @@ describe('wire command names', () => {
     server.on('pressKeyboardKeys', () => [{ data: 'Ok' }, { data: 'Finished' }]);
     server.on('beginTouch', () => [{ data: 0 }]);
     server.on('getTimeScale', () => [{ data: 1 }]);
+    server.on('getAllLoadedScenesAndObjects', () => [{ data: [] }]);
 
     const p = { x: 1, y: 1 };
     await driver.getAllLoadedScenesAndObjects();
