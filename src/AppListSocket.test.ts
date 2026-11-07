@@ -100,7 +100,7 @@ describe('AppListSocket', () => {
     list.close();
   });
 
-  it('reports an unreachable server and does not reconnect', async () => {
+  it('reports an unreachable server and does not reconnect in a loop', async () => {
     const server = new FakeAltServer();
     const Broken = class extends server.WebSocket {
       constructor(url: string) {
@@ -114,11 +114,43 @@ describe('AppListSocket', () => {
     const last = states[states.length - 1];
     expect(last.status).toBe('closed');
     if (last.status === 'closed') expect(last.info.kind).toBe('unreachable');
-    expect(server.sockets).toHaveLength(1);
+    expect(server.sockets).toHaveLength(2); // the CLI path, then one fallback to /altws/connected-app
   });
 
   it('drops driver entries if a server sends them', () => {
     expect(parseAppList([tags('A'), tags('drv', { IsDriver: true })])?.map((a) => a.name)).toEqual(['A']);
     expect(parseAppList({ commandName: 'driverRegistered' })).toBeNull();
+  });
+
+  it('falls back to /altws/connected-app on servers older than 2.4 that lack the CLI endpoint', async () => {
+    const server = new FakeAltServer({ missingPaths: ['/altws/connected-app-cli'] });
+    server.appListHandler = (ws, text) => {
+      if (text === 'GetApps') setTimeout(() => ws.push([tags('TicTacToe')]), 0);
+    };
+    const states: AppListState[] = [];
+    const list = new AppListSocket({ host: 'localhost', port: 13000, secure: false }, { WebSocketImpl: server.WebSocket, onChange: (s) => states.push(s) });
+    await until(() => lastApps(states));
+    expect(server.sockets.map((s) => s.path)).toEqual(['/altws/connected-app-cli', '/altws/connected-app']);
+    expect(server.last('/altws/connected-app').sent).toEqual(['GetApps']);
+    expect(lastApps(states)?.map((a) => a.name)).toEqual(['TicTacToe']);
+    list.close();
+  });
+
+  it('an unreachable server tries the CLI endpoint and the older endpoint once each, then reports unreachable', async () => {
+    const server = new FakeAltServer({ missingPaths: ['/altws/connected-app-cli', '/altws/connected-app'] });
+    const states: AppListState[] = [];
+    new AppListSocket({ host: 'localhost', port: 13000, secure: false }, { WebSocketImpl: server.WebSocket, onChange: (s) => states.push(s) });
+    await until(() => states.some((s) => s.status === 'closed'));
+    await flush(20);
+    const last = states[states.length - 1];
+    expect(last.status).toBe('closed');
+    if (last.status === 'closed') expect(last.info.kind).toBe('unreachable');
+    expect(server.sockets).toHaveLength(2);
+  });
+
+  it('strips the JSON quotes AltServer leaves around the SdkVersion tag', () => {
+    expect(parseAppList([tags('A', { SdkVersion: '"2.3.3"' })])?.[0].sdkVersion).toBe('2.3.3');
+    expect(parseAppList([tags('A', { SdkVersion: '2.3.3' })])?.[0].sdkVersion).toBe('2.3.3');
+    expect(parseAppList([tags('A', { SdkVersion: '""' })])?.[0].sdkVersion).toBeNull();
   });
 });

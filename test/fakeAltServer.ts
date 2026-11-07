@@ -114,6 +114,8 @@ export interface FakeAltServerOptions {
   /** Refuse every connection with this close code instead of opening. */
   refuseWith?: { code: number; reason?: string };
   serverVersion?: string;
+  /** Paths this server does not serve (an older AltServer); the handshake fails as unreachable. */
+  missingPaths?: string[];
 }
 
 /**
@@ -125,7 +127,7 @@ export class FakeAltServer {
   readonly sockets: FakeSocket[] = [];
   readonly closedByClient: { socket: FakeSocket; code: number }[] = [];
   private readonly handlers = new Map<string, CommandHandler>();
-  /** Text frames received on /altws/connected-app-cli and /altws/live-update. */
+  /** Text frames received on the app-list endpoints (/altws/connected-app-cli, /altws/connected-app) and /altws/live-update. */
   appListHandler: ((socket: FakeSocket, text: string) => void) | null = null;
   liveHandler: ((socket: FakeSocket, text: string) => void) | null = null;
 
@@ -164,6 +166,10 @@ export class FakeAltServer {
 
   accept(socket: FakeSocket): void {
     if (socket.readyState !== CONNECTING) return;
+    if (this.options.missingPaths?.includes(socket.path)) {
+      socket.serverClose(1006);
+      return;
+    }
     const refuse = this.options.refuseWith;
     if (refuse) {
       // A rejection after the upgrade still opens first, then closes with the code.
@@ -176,7 +182,7 @@ export class FakeAltServer {
   }
 
   receive(socket: FakeSocket, text: string): void {
-    if (socket.path === '/altws/connected-app-cli') return this.appListHandler?.(socket, text);
+    if (socket.path === '/altws/connected-app-cli' || socket.path === '/altws/connected-app') return this.appListHandler?.(socket, text);
     if (socket.path === '/altws/live-update') return this.liveHandler?.(socket, text);
     const cmd = JSON.parse(text) as ReceivedCommand;
     const handler = this.handlers.get(cmd.commandName);

@@ -2,6 +2,10 @@
 // connected apps back as a JSON array of Tags, and the server pushes updates. Opening it makes the
 // server activate the paused notification in every connected app, so the client keeps ONE socket
 // open and polls on it; it never reconnects on its own.
+//
+// AltServer added the CLI endpoint in 2.4.0. Older servers (including Desktop 2.3.x's embedded one)
+// serve the same read-only list on /altws/connected-app, so a CLI handshake that fails before
+// opening falls back to that path once. /altws/desktop (which accepts shutdown etc.) is never used.
 
 import { closedByClient, connectFailed, describeClose, type CloseInfo } from './closeCodes';
 import { serverOrigin, type AppSelector, type ServerAddress } from './connectionUrl';
@@ -45,6 +49,13 @@ export interface AppListOptions {
 
 const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback);
 
+/** AltServer stores the raw getServerVersion reply, JSON quotes included (e.g. "\"2.3.3\""). */
+function sdkVersionOf(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const clean = v.replace(/"/g, '').trim();
+  return clean || null;
+}
+
 export function parseAppList(frame: unknown): AppInfo[] | null {
   if (!Array.isArray(frame)) return null;
   return frame
@@ -56,33 +67,54 @@ export function parseAppList(frame: unknown): AppInfo[] | null {
       deviceInstanceId: str(t.DeviceInstanceId, 'unknown'),
       gameEngine: str(t.GameEngine, 'unknown'),
       appId: str(t.AppId),
-      sdkVersion: typeof t.SdkVersion === 'string' && t.SdkVersion ? t.SdkVersion : null,
+      sdkVersion: sdkVersionOf(t.SdkVersion),
       olderVersion: Boolean(t.OlderVersion),
       isInBackground: Boolean(t.IsInBackground),
     }));
 }
 
+const APP_LIST_PATHS = ['/altws/connected-app-cli', '/altws/connected-app'] as const;
+
 export class AppListSocket {
-  private readonly ws: WebSocketLike;
+  private ws: WebSocketLike;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private polling = true;
   private opened = false;
   private _state: AppListState = { status: 'connecting' };
 
   constructor(
-    addr: ServerAddress,
+    private readonly addr: ServerAddress,
     private readonly opts: AppListOptions,
   ) {
-    const Impl = opts.WebSocketImpl ?? defaultWebSocket();
-    this.ws = new Impl(`${serverOrigin(addr)}/altws/connected-app-cli`);
-    this.ws.onopen = () => {
+    this.ws = this.open(0);
+  }
+
+  /** The endpoint path in use (the CLI one, or the pre-2.4 fallback). */
+  get path(): string {
+    return APP_LIST_PATHS[this.pathIndex];
+  }
+
+  private pathIndex = 0;
+
+  private open(pathIndex: number): WebSocketLike {
+    this.pathIndex = pathIndex;
+    const Impl = this.opts.WebSocketImpl ?? defaultWebSocket();
+    const ws = new Impl(`${serverOrigin(this.addr)}${APP_LIST_PATHS[pathIndex]}`);
+    // A failed handshake on the CLI path may just mean an older server: try the next path once.
+    const failedBeforeOpen = (info: CloseInfo) => {
+      if (ws !== this.ws || this._state.status === 'closed') return;
+      if (pathIndex + 1 < APP_LIST_PATHS.length) this.ws = this.open(pathIndex + 1);
+      else this.finish(info);
+    };
+    ws.onopen = () => {
+      if (ws !== this.ws) return;
       this.opened = true;
       this.set({ status: 'open', apps: null });
       this.refresh();
       this.syncPolling();
     };
-    this.ws.onmessage = (ev) => {
-      if (typeof ev.data !== 'string') return;
+    ws.onmessage = (ev) => {
+      if (ws !== this.ws || typeof ev.data !== 'string') return;
       let parsed: unknown;
       try {
         parsed = JSON.parse(ev.data);
@@ -92,10 +124,17 @@ export class AppListSocket {
       const apps = parseAppList(parsed); // driverRegistered and other objects are ignored
       if (apps && this._state.status === 'open') this.set({ status: 'open', apps });
     };
-    this.ws.onerror = () => {
-      if (!this.opened) this.finish(connectFailed());
+    // Node's WebSocket fires only `error` when refused; browsers fire `error` then `close`.
+    ws.onerror = () => {
+      if (!this.opened) failedBeforeOpen(connectFailed());
     };
-    this.ws.onclose = (ev) => this.finish(describeClose(ev.code, ev.reason ?? '', { opened: this.opened }));
+    ws.onclose = (ev) => {
+      if (ws !== this.ws) return;
+      const info = describeClose(ev.code, ev.reason ?? '', { opened: this.opened });
+      if (this.opened) this.finish(info);
+      else failedBeforeOpen(info);
+    };
+    return ws;
   }
 
   get state(): AppListState {
