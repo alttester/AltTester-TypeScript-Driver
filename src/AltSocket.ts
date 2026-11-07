@@ -3,7 +3,7 @@
 // (AltDriverController.cs): one command in flight, FIFO, consecutive duplicate reads collapse,
 // 60 s timeout, reads retried up to twice on timeout, inputs never retried.
 
-import { describeClose, formatClose, type CloseInfo } from './closeCodes';
+import { closedByClient, connectFailed, describeClose, formatClose, type CloseInfo } from './closeCodes';
 import { buildConnectionUrl, type AppSelector, type ServerAddress } from './connectionUrl';
 import { defaultWebSocket, WS_OPEN, type WebSocketCtor, type WebSocketLike } from './socketTypes';
 
@@ -189,7 +189,7 @@ export class AltSocket {
 
   close(): void {
     if (this.closeInfo) return;
-    this.handleClose(describeClose(1000, '', { opened: true }));
+    this.handleClose(closedByClient());
     try {
       this.ws.close(1000);
     } catch {
@@ -230,11 +230,9 @@ export class AltSocket {
         }, registerTimeoutMs);
       };
       this.ws.onerror = () => {
-        // Browsers follow a failed handshake with a close event (code 1006), but Node 22's
-        // WebSocket fires only `error`, so a pre-open error is treated as "unreachable" here.
-        // After open, the close event that follows carries the code.
+        // See connectFailed(); after open, the close event that follows carries the code.
         if (opened || registered) return;
-        const info = describeClose(1006, '', { opened: false });
+        const info = connectFailed();
         this.closeInfo = info;
         fail(info);
       };

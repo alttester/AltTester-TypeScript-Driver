@@ -3,7 +3,7 @@
 // global per app (every live-update driver of the app sees the frames), so Stop is sent only when
 // this client sent Start.
 
-import { describeClose, type CloseInfo } from './closeCodes';
+import { connectFailed, describeClose, type CloseInfo } from './closeCodes';
 import { buildConnectionUrl, type AppSelector, type ServerAddress } from './connectionUrl';
 import { defaultWebSocket, WS_OPEN, type WebSocketCtor, type WebSocketLike } from './socketTypes';
 
@@ -40,7 +40,7 @@ export class LiveUpdateSocket {
       else if (ArrayBuffer.isView(data)) opts.onFrame(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer);
     };
     this.ws.onerror = () => {
-      if (!this.opened) this.finish(describeClose(1006, '', { opened: false }));
+      if (!this.opened) this.finish(connectFailed());
     };
     this.ws.onclose = (ev) => this.finish(describeClose(ev.code, ev.reason ?? '', { opened: this.opened }));
   }

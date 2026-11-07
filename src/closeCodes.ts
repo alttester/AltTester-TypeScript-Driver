@@ -75,6 +75,15 @@ export function describeClose(code: number, serverReason = '', opts: { opened?: 
   return { code, kind: 'unknown', message: `The connection closed unexpectedly (code ${code}).`, serverReason };
 }
 
+/** This client closed the socket itself. */
+export const closedByClient = (): CloseInfo => describeClose(1000, '', { opened: true });
+
+/**
+ * The socket failed before opening. Browsers follow a failed handshake with a close event (1006), but
+ * Node 22's WebSocket fires only `error`, so every socket maps a pre-open error to this.
+ */
+export const connectFailed = (): CloseInfo => describeClose(1006, '', { opened: false });
+
 /** Message for the UI: the plain-language reason, plus the server's text when it adds something. */
 export function formatClose(info: CloseInfo): string {
   const reason = info.serverReason.trim();

@@ -2,6 +2,8 @@
 // the patterns from https://alttester.com/app/uploads/AltTester/desktop/sdk_versions.json; the web
 // inspector ships that file's `default` entry as a constant (no network fetch in v1).
 
+import { normalizeEngine } from './engine';
+
 export interface SupportedSdkPatterns {
   unity: string;
   unreal: string;
@@ -24,7 +26,7 @@ function splitPatterns(list: string): string[] {
 
 /** Patterns for an engine tag; UNKNOWN (or anything else) accepts either engine's list. */
 export function patternsForEngine(engineTag: string | null | undefined, patterns = BUNDLED_SDK_PATTERNS): string[] {
-  const engine = (engineTag ?? '').trim().toLowerCase();
+  const engine = normalizeEngine(engineTag);
   if (engine === 'unity') return splitPatterns(patterns.unity);
   if (engine === 'unreal') return splitPatterns(patterns.unreal);
   return [...splitPatterns(patterns.unity), ...splitPatterns(patterns.unreal)];

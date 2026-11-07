@@ -33,15 +33,24 @@ function setup(pollMs = 5_000) {
   return { server, list, states, gets, setApps: (a: ReturnType<typeof tags>[]) => (apps = a) };
 }
 
+/** Polls until the condition holds (the fake replies through two timer hops, so fixed sleeps race under load). */
+async function until(cond: () => unknown, timeoutMs = 1000): Promise<void> {
+  const end = Date.now() + timeoutMs;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error('condition not met in time');
+    await flush(2);
+  }
+}
+
 const lastApps = (states: AppListState[]) => {
   const s = states[states.length - 1];
-  return s.status === 'open' ? s.apps : undefined;
+  return s?.status === 'open' ? s.apps : undefined;
 };
 
 describe('AppListSocket', () => {
   it('opens /altws/connected-app-cli, sends GetApps, and parses the Tags array', async () => {
     const { server, list, states } = setup();
-    await flush(5);
+    await until(() => lastApps(states));
     expect(server.last('/altws/connected-app-cli').sent).toEqual(['GetApps']);
     expect(lastApps(states)?.map((a) => [a.name, a.platform, a.gameEngine, a.sdkVersion])).toEqual([
       ['TicTacToe', 'Editor', 'UNITY', '2.3.3'],
@@ -52,7 +61,7 @@ describe('AppListSocket', () => {
 
   it('ignores driverRegistered text frames', async () => {
     const { server, list, states } = setup();
-    await flush(5);
+    await until(() => lastApps(states));
     const before = states.length;
     server.last('/altws/connected-app-cli').sendDriverRegistered();
     expect(states.length).toBe(before);
@@ -62,7 +71,7 @@ describe('AppListSocket', () => {
 
   it('takes pushed updates: an app removed by the server disappears', async () => {
     const { server, list, states } = setup();
-    await flush(5);
+    await until(() => lastApps(states));
     server.last('/altws/connected-app-cli').push([tags('TicTacToe')]);
     expect(lastApps(states)?.map((a) => a.name)).toEqual(['TicTacToe']);
     list.close();
@@ -70,17 +79,16 @@ describe('AppListSocket', () => {
 
   it('polls GetApps so an app shows up even when pushes are suppressed', async () => {
     const { list, states, gets, setApps } = setup(20);
-    await flush(5);
+    await until(() => lastApps(states));
     setApps([tags('TicTacToe'), tags('Lyra'), tags('NewGame')]);
-    await flush(40);
+    await until(() => lastApps(states)?.some((a) => a.name === 'NewGame'));
     expect(gets.length).toBeGreaterThanOrEqual(2);
-    expect(lastApps(states)?.map((a) => a.name)).toContain('NewGame');
     list.close();
   });
 
   it('stops polling while the picker is hidden and uses one socket throughout', async () => {
     const { server, list, gets } = setup(10);
-    await flush(5);
+    await until(() => gets.length);
     list.setPolling(false);
     const n = gets.length;
     await flush(40);

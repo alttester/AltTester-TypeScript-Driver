@@ -3,8 +3,8 @@
 // server activate the paused notification in every connected app, so the client keeps ONE socket
 // open and polls on it; it never reconnects on its own.
 
-import { describeClose, type CloseInfo } from './closeCodes';
-import { serverOrigin, type ServerAddress } from './connectionUrl';
+import { closedByClient, connectFailed, describeClose, type CloseInfo } from './closeCodes';
+import { serverOrigin, type AppSelector, type ServerAddress } from './connectionUrl';
 import { defaultWebSocket, WS_OPEN, type WebSocketCtor, type WebSocketLike } from './socketTypes';
 
 /** Tags of one connected app (AltServer/AltServer/Tags/Tags.cs), camelCased. */
@@ -18,6 +18,17 @@ export interface AppInfo {
   sdkVersion: string | null;
   olderVersion: boolean;
   isInBackground: boolean;
+}
+
+/** The query parameters that address this app on the driver and live-update endpoints. */
+export function appSelectorFor(app: AppInfo): AppSelector {
+  return {
+    appName: app.name,
+    appId: app.appId || undefined,
+    platform: app.platform,
+    platformVersion: app.platformVersion,
+    deviceInstanceId: app.deviceInstanceId,
+  };
 }
 
 export type AppListState =
@@ -81,9 +92,8 @@ export class AppListSocket {
       const apps = parseAppList(parsed); // driverRegistered and other objects are ignored
       if (apps && this._state.status === 'open') this.set({ status: 'open', apps });
     };
-    // Node's WebSocket fires only `error` when the connection is refused; browsers also fire close.
     this.ws.onerror = () => {
-      if (!this.opened) this.finish(describeClose(1006, '', { opened: false }));
+      if (!this.opened) this.finish(connectFailed());
     };
     this.ws.onclose = (ev) => this.finish(describeClose(ev.code, ev.reason ?? '', { opened: this.opened }));
   }
@@ -110,7 +120,7 @@ export class AppListSocket {
 
   close(): void {
     if (this._state.status === 'closed') return;
-    this.finish(describeClose(1000, '', { opened: true }));
+    this.finish(closedByClient());
     try {
       this.ws.close(1000);
     } catch {
