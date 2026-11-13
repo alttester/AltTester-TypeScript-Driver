@@ -22,7 +22,7 @@ accompanying documentation in any form to any person or entity without the prior
 consent of Licensor;
 (c) redistribute, republish, upload, or otherwise make the Software Product or any part of it
 available to third parties through any channel, including but not limited to public or private
-package registries (such as PyPI, NuGet, or Maven), version control repositories, file sharing
+package registries (such as npm, PyPI, NuGet, or Maven), version control repositories, file sharing
 platforms, or any other distribution mechanism, without the prior written consent of Licensor —
 except as expressly permitted under Section 3.1(b) for proof-of-concept deliveries.
 (d) create, distribute, or publish modified versions of the Software Product or any derivative
