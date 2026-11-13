@@ -14,10 +14,15 @@ describe('SDK version gate', () => {
     const bad = checkSdkVersion('2.0.4', 'UNITY');
     expect(bad.ok).toBe(false);
     if (!bad.ok) {
-      expect(bad.expected).toBe('2.3.*');
-      expect(bad.message).toContain('SDK v.2.3.*');
+      expect(bad.expected).toBe('2.4.*');
+      expect(bad.message).toContain('SDK v.2.4.*');
       expect(bad.message).toContain('2.0.4');
     }
+  });
+
+  it('accepts the current SDKs: Unity 2.4.1 and Unreal 1.3.0', () => {
+    expect(checkSdkVersion('2.4.1', 'UNITY')).toEqual({ ok: true });
+    expect(checkSdkVersion('1.3.0', 'UNREAL')).toEqual({ ok: true });
   });
 
   it('accepts an Unreal 1.x version in the Unreal range, but not in the Unity one', () => {
@@ -26,7 +31,7 @@ describe('SDK version gate', () => {
   });
 
   it('an unknown engine accepts either list (case-insensitive)', () => {
-    expect(patternsForEngine('unknown')).toHaveLength(5);
+    expect(patternsForEngine('unknown')).toHaveLength(7);
     expect(checkSdkVersion('1.1.3', 'UNKNOWN')).toEqual({ ok: true });
     expect(checkSdkVersion('2.3.0', undefined)).toEqual({ ok: true });
   });

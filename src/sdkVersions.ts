@@ -9,10 +9,14 @@ export interface SupportedSdkPatterns {
   unreal: string;
 }
 
-/** `default` entry of sdk_versions.json as of 2026-11-07. */
+/**
+ * Started from the `default` entry of sdk_versions.json (2026-11-07), then extended with the SDKs released since:
+ * Unity SDK 2.4 and Unreal SDK 1.3 (2026-11-04). On 2026-11-13 the hosted file still stopped at 2.3.* / 1.2.*.
+ * Add each new SDK minor version here when it ships.
+ */
 export const BUNDLED_SDK_PATTERNS: SupportedSdkPatterns = {
-  unity: '2.1.*, 2.2.*,2.3.*',
-  unreal: '1.1.*,1.2.*',
+  unity: '2.1.*, 2.2.*,2.3.*,2.4.*',
+  unreal: '1.1.*,1.2.*,1.3.*',
 };
 
 export type SdkCheck = { ok: true } | { ok: false; message: string; expected: string };
