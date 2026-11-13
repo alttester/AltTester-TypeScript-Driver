@@ -93,3 +93,8 @@ npm test
 npm run typecheck
 npm run build
 ```
+
+## License
+
+Proprietary, under the AltTester® SDK License Agreement. See [LICENSE](LICENSE). Using the driver requires a valid
+AltTester® Lite or Pro subscription.
