@@ -96,5 +96,5 @@ npm run build
 
 ## License
 
-Proprietary: the AltTester® SDK License Agreement (Non-GPL Version), the same one the Python and Java bindings ship
-under. See [LICENSE](LICENSE). Using the driver requires a valid AltTester® Lite or Pro subscription.
+Proprietary, under the AltTester® SDK License Agreement. See [LICENSE](LICENSE). Using the driver requires a valid
+AltTester® Lite or Pro subscription.
