@@ -1,2 +1,8 @@
-/** Version of this binding; sent to AltServer as driverType "typescript_<version>". Keep in sync with package.json. */
-export const BINDING_VERSION = '0.1.0';
+import { version } from '../../package.json';
+
+/**
+ * Version of this binding; sent to AltServer as driverType "typescript_<version>".
+ * Read from package.json so it cannot drift from the published version. The bundler inlines only the
+ * `version` field (esbuild tree-shakes named JSON imports), so package.json itself is not shipped in dist/.
+ */
+export const BINDING_VERSION: string = version;
