@@ -1,0 +1,99 @@
+name: E2E
+
+# Runs the end-to-end suite (test/e2e, `npm run test:e2e`) against the Unity sample game that
+# AltTester-Unity-SDK-Closed-Source publishes as a GitHub release asset:
+#   - "sample-game-development" (pre-release): the latest development build, the default here.
+#   - "sample-game-<SDK version>", for example "sample-game-2.4.1": the build of a released SDK.
+# The game is a macOS build. It connects to the AltServer it was built for, which build-info.json in the release
+# names, so the job runs on the office self-hosted runners that can reach that AltServer.
+#
+# Needs the secret SAMPLE_GAME_TOKEN: a token that can read the contents of alttester/AltTester-Unity-SDK-Closed-Source
+# (a fine-grained PAT with "Contents: read" on that one repo, or a GitHub App token). GITHUB_TOKEN can't read another
+# private repo.
+#
+# The game connects as "__default__", the same name as the closed repo's test jobs use on the same AltServer, so a run
+# that overlaps one of those jobs can reach the wrong game.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      sample_game_release:
+        description: "Release of the sample game to test against"
+        type: string
+        default: sample-game-development
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-unity-macos:
+    runs-on: [self-hosted, macOS, unity]
+    timeout-minutes: 45
+    env:
+      SAMPLE_GAME_REPO: alttester/AltTester-Unity-SDK-Closed-Source
+      SAMPLE_GAME_RELEASE: ${{ inputs.sample_game_release || 'sample-game-development' }}
+      SAMPLE_GAME_TOKEN: ${{ secrets.SAMPLE_GAME_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the sample game
+        run: |
+          set -euo pipefail
+          if [ -z "$SAMPLE_GAME_TOKEN" ]; then
+            echo "::error::The secret SAMPLE_GAME_TOKEN is not set. It needs read access to $SAMPLE_GAME_REPO's contents."
+            exit 1
+          fi
+          api() {
+            curl -sSL --fail-with-body -H "Authorization: Bearer $SAMPLE_GAME_TOKEN" -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+          }
+
+          rm -rf sample-game && mkdir sample-game
+          RELEASE=$(api -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$SAMPLE_GAME_REPO/releases/tags/$SAMPLE_GAME_RELEASE")
+          for FILE in sampleGame-macOS.zip build-info.json; do
+            ASSET_ID=$(jq -r --arg n "$FILE" '.assets[] | select(.name == $n) | .id' <<< "$RELEASE")
+            [ -n "$ASSET_ID" ] || { echo "::error::$SAMPLE_GAME_RELEASE has no asset $FILE"; exit 1; }
+            api -H "Accept: application/octet-stream" -o "sample-game/$FILE" \
+              "$GITHUB_API_URL/repos/$SAMPLE_GAME_REPO/releases/assets/$ASSET_ID"
+          done
+
+          # ditto keeps the .app's permissions and symlinks, which unzip can lose
+          ditto -x -k sample-game/sampleGame-macOS.zip sample-game
+          cat sample-game/build-info.json
+
+          {
+            echo "ALTSERVER_HOST=$(jq -r .altserver_host sample-game/build-info.json)"
+            echo "ALTSERVER_PORT=$(jq -r .altserver_port sample-game/build-info.json)"
+            echo "ALTSERVER_PLATFORM_VERSION=Mac OS X $(sw_vers -productVersion)"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo "### Sample game"
+            echo ""
+            echo "Release \`$SAMPLE_GAME_RELEASE\`: SDK $(jq -r .sdk_version sample-game/build-info.json), commit $(jq -r .commit sample-game/build-info.json | cut -c1-7)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start the sample game
+        run: open "$PWD/sample-game/sampleGame.app"
+
+      - name: Run the e2e suite
+        run: npm run test:e2e
+
+      # Only this job's copy, matched by its path: another runner on the same machine may have a game open
+      - name: Stop the sample game
+        if: always()
+        run: pkill -f "$PWD/sample-game/sampleGame.app/" || true
