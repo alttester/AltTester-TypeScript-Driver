@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { FakeAltServer, flush, type ReceivedCommand } from '../../test/fakeAltServer';
 import {
   AltTesterInvalidServerResponse,
+  CameraNotFoundException,
   ComponentNotFoundException,
   InvalidCommandException,
   MultipleDriversException,
@@ -137,6 +138,16 @@ describe('binding AltDriver: find and wait', () => {
     await expect(driver.waitForObject(By.NAME, 'Cube', By.NAME, '', 0.05, 0.01)).rejects.toBeInstanceOf(WaitTimeOutException);
     server.on('findObject', () => [{ error: { type: 'invalidPath', message: 'bad' } }]);
     await expect(driver.waitForObject(By.PATH, '//[', By.NAME, '', 5, 0.01)).rejects.toThrow('bad');
+  });
+
+  it('the waits stop at once when the camera is missing, as in C#', async () => {
+    const { server, driver } = await setup();
+    let calls = 0;
+    server.on('findObject', () => (++calls, [{ error: { type: 'cameraNotFound', message: 'no camera' } }]));
+    await expect(driver.waitForObject(By.NAME, 'Cube', By.TAG, 'Missing', 5, 0.01)).rejects.toBeInstanceOf(CameraNotFoundException);
+    await expect(driver.waitForObjectWhichContains(By.NAME, 'Cu', By.TAG, 'Missing', 5, 0.01)).rejects.toBeInstanceOf(CameraNotFoundException);
+    await expect(driver.waitForObjectToNotBePresent(By.NAME, 'Cube', By.TAG, 'Missing', 5, 0.01)).rejects.toBeInstanceOf(CameraNotFoundException);
+    expect(calls).toBe(3);
   });
 
   it('the implicit timeout replaces the default wait timeout', async () => {
