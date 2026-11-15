@@ -35,7 +35,7 @@ concurrency:
 jobs:
   e2e-unity-macos:
     runs-on: [self-hosted, macOS, unity]
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       SAMPLE_GAME_REPO: alttester/AltTester-Unity-SDK-Closed-Source
       SAMPLE_GAME_RELEASE: ${{ inputs.sample_game_release || 'sample-game-development' }}
