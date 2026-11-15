@@ -21,6 +21,10 @@ The `[Category]` marks (WebGLUnsupported and so on) are kept as comments; the su
   check the message.
 - A few messages are worded like the Python binding rather than C# (for example `waitForObjectToNotBePresent`).
 - `setComponentProperty` takes `(component, property, assembly, value)`, the Python order.
+- `callComponentMethod` returns the parsed JSON value (a method returning the string "3" gives the number 3), where
+  C# deserializes into the requested type.
+- With no parameter types, the driver sends an empty array where C# sends null, so the server's "No method found"
+  message ends in `(System.String[])` instead of `()`. The tests compare only the part before it.
 
 ## In CI
 

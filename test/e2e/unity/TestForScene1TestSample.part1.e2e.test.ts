@@ -613,8 +613,9 @@ describe('TestForScene1TestSample (part 1)', () => {
     const assemblyName = 'Assembly-CSharp';
     const parameters = ['1', '2'];
     const altElement = await altDriver.findObject(By.NAME, 'Capsule');
-    const data = await altElement.callComponentMethod<string>(componentName, methodName, assemblyName, parameters);
-    expect(data).toBe('3');
+    const data = await altElement.callComponentMethod<number>(componentName, methodName, assemblyName, parameters);
+    // C# deserializes the result into the requested string; this driver returns the parsed JSON value, a number
+    expect(data).toBe(3);
   });
 
   it('TestCallMethodWithOptionalParametersString', async () => {
@@ -653,7 +654,9 @@ describe('TestForScene1TestSample (part 1)', () => {
       MethodWithGivenParametersNotFoundException,
     );
     expect(
-      exception.message.startsWith('No method found with 3 parameters matching signature: TestMethodWithManyParameters()'),
+      // C# sends no parameter types (null) and gets "...()". This driver sends an empty array, which the server
+      // prints as "(System.String[])", so only the part before the types is compared.
+      exception.message.startsWith('No method found with 3 parameters matching signature: TestMethodWithManyParameters('),
       exception.message,
     ).toBe(true);
   });
@@ -670,7 +673,9 @@ describe('TestForScene1TestSample (part 1)', () => {
       MethodWithGivenParametersNotFoundException,
     );
     expect(
-      exception.message.startsWith('No method found with 3 parameters matching signature: TestMethodWithManyParameters()'),
+      // C# sends no parameter types (null) and gets "...()". This driver sends an empty array, which the server
+      // prints as "(System.String[])", so only the part before the types is compared.
+      exception.message.startsWith('No method found with 3 parameters matching signature: TestMethodWithManyParameters('),
       exception.message,
     ).toBe(true);
   });
