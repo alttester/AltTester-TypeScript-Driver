@@ -21,6 +21,7 @@ import {
   ConnectionTimeoutException,
   createConnectionError,
   InvalidCommandException,
+  CameraNotFoundException,
   InvalidParameterValueException,
   NotFoundException,
   WaitTimeOutException,
@@ -148,6 +149,14 @@ function plain(v: unknown): string {
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * True when a find failed because the object isn't there (yet). A missing camera is a different failure: the waits
+ * stop at once and rethrow it, as the C# driver does (its AltCameraNotFoundException is not a NotFoundException).
+ */
+function isObjectMissing(e: unknown): boolean {
+  return e instanceof NotFoundException && !(e instanceof CameraNotFoundException);
 }
 
 export class AltDriver {
@@ -306,7 +315,7 @@ export class AltDriver {
       try {
         await this.findObject(by, value, cameraBy, cameraValue, enabled);
       } catch (e) {
-        if (e instanceof NotFoundException) return;
+        if (isObjectMissing(e)) return;
         throw e;
       }
       if (Date.now() >= deadline) throw new WaitTimeOutException(`Element ${value} still found after ${limit} seconds`);
@@ -707,7 +716,7 @@ export class AltDriver {
       try {
         return await find();
       } catch (e) {
-        if (!(e instanceof NotFoundException)) throw e;
+        if (!isObjectMissing(e)) throw e;
       }
       if (Date.now() >= deadline) throw new WaitTimeOutException(`Element ${value} not found after ${limit} seconds`);
       this.logger.debug(`Waiting for element ${value}...`);

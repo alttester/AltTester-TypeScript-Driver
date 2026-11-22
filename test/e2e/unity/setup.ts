@@ -1,7 +1,7 @@
-// Shared setup for the Unity sample-scene suite: a port of the Python integration tests in
-// AltTester-Unity-SDK-Closed-Source (Bindings~/python/tests/integration), run against sampleGame built
-// from sdk-package. Same environment variables as the Python conftest.
-import { AltDriver, By } from '../../../src/binding';
+// Shared setup for the Unity sample-scene suite: a port of the C# integration tests in
+// AltTester-Unity-SDK-Closed-Source (sdk-package/Assets/Examples/Test/Editor/Driver), run against sampleGame built
+// from sdk-package. Same environment variables as TestsHelper.cs.
+import { AltDriver } from '../../../src/binding';
 
 export const Scenes = {
   Scene01: 'Scene 1 AltDriverTestScene',
@@ -19,14 +19,9 @@ export const port = Number(process.env.ALTSERVER_PORT ?? 13000);
 export const appName = process.env.ALTSERVER_APP_NAME ?? '__default__';
 export const platformVersion = process.env.ALTSERVER_PLATFORM_VERSION ?? 'unknown';
 
-/** One driver per test file, like the Python class-scoped fixture. */
+/** One driver per test class, like TestBase's OneTimeSetUp. */
 export function connectDriver(): Promise<AltDriver> {
   return AltDriver.connect({ host, port, appName, platformVersion, connectTimeout: 180 });
-}
-
-/** Closes the AltTester popup in the sample game, as the Python setup does. */
-export async function closeAltTesterPopup(driver: AltDriver): Promise<void> {
-  await (await driver.findObject(By.PATH, '/AltTesterPrefab//CloseButton', By.NAME, '', false)).tap();
 }
 
 export const sleep = (seconds: number) => new Promise<void>((r) => setTimeout(r, seconds * 1000));
