@@ -49,6 +49,16 @@
         "default": "./dist/node.cjs"
       }
     },
+    "./allure": {
+      "import": {
+        "types": "./dist/allure.d.ts",
+        "default": "./dist/allure.js"
+      },
+      "require": {
+        "types": "./dist/allure.d.cts",
+        "default": "./dist/allure.cjs"
+      }
+    },
     "./testing": {
       "import": {
         "types": "./dist/testing.d.ts",
@@ -76,14 +86,27 @@
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "report": "allure generate allure-results --output allure-report --clean",
+    "report:open": "allure open allure-report"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
+  "peerDependencies": {
+    "allure-js-commons": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "allure-js-commons": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.9.0",
     "@types/ws": "^8.5.12",
+    "allure": "^3.33.0",
+    "allure-js-commons": "^3.15.0",
+    "allure-vitest": "^3.15.0",
     "tsup": "^8.3.5",
     "typescript": "~5.6.3",
     "vitest": "^2.1.4"

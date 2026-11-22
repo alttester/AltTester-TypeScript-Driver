@@ -29,7 +29,14 @@ The `[Category]` marks (WebGLUnsupported and so on) are kept as comments; the su
 ## In CI
 
 `.github/workflows/e2e.yml` runs the suite on the office macOS runners against the `sample-game-development`
-release that the closed repo publishes.
+release that the closed repo publishes, and uploads the Allure report (see below).
+
+## Allure report
+
+Every run writes Allure results to `allure-results/`, which is emptied at the start of the run. When a test fails,
+`allure.setup.ts` attaches the game screenshot and the test file's driver log to it, using `@alttester/driver/allure`.
+`npm run report` builds the report into `allure-report/`, and `npm run report:open` opens it. In CI the report is
+built after every run, passed or failed, and uploaded as the `allure-report` artifact of the run (kept 7 days).
 
 ## Running it locally
 

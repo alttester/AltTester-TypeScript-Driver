@@ -93,6 +93,19 @@ jobs:
       - name: Run the e2e suite
         run: npm run test:e2e
 
+      # The report is built whether the tests passed or failed. Failed tests carry the game screenshot and the driver log.
+      - name: Build the Allure report
+        if: always() && hashFiles('allure-results/*.json') != ''
+        run: npm run report
+
+      - name: Upload the Allure report
+        if: always() && hashFiles('allure-report/index.html') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+          retention-days: 7
+
       # Only this job's copy, matched by its path: another runner on the same machine may have a game open
       - name: Stop the sample game
         if: always()

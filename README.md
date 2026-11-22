@@ -32,6 +32,7 @@ token on CI.
 | `@alttester/driver` | The binding: `AltDriver`, `AltObject`, `By`, `AltKeyCode`, enums, typed exceptions |
 | `@alttester/driver/protocol` | The low-level protocol client the web inspector uses (`AltSocket`, app list, live view) |
 | `@alttester/driver/node` | Node-only helpers: `AltReversePortForwarding` (adb reverse, iproxy) |
+| `@alttester/driver/allure` | Optional: puts AltTester screenshots and the driver log into an Allure report |
 | `@alttester/driver/testing` | The in-memory fake AltServer, for consumers' own tests |
 
 The package was split out of [alttester-web](https://github.com/alttester), the browser-based AltTester
@@ -68,6 +69,28 @@ Errors follow the other bindings: `NotFoundException` (and `ObjectNotFound`, `Co
 `AppDisconnectedException`, `InvalidCommandException`, `AltTesterInvalidServerResponse`, ...; all extend
 `AltException`.
 
+## Allure reports
+
+`@alttester/driver/allure` attaches AltTester material to the test that is running, in any test runner that has an
+Allure adapter (allure-vitest, allure-mocha, allure-jest, allure-playwright or @wdio/allure-reporter). It needs the
+`allure-js-commons` package next to that adapter. Nothing else in the driver uses it, so the package is optional.
+
+```ts
+import { AltDriver } from '@alttester/driver';
+import { attachFailureEvidence, createLogRecorder } from '@alttester/driver/allure';
+
+const log = createLogRecorder(); // keeps the driver log in memory instead of printing it
+const driver = await AltDriver.connect({ appName: 'MyGame', enableLogging: log });
+
+// In your runner's after-test hook, when the test failed:
+await attachFailureEvidence(driver, { log });
+```
+
+`attachFailureEvidence` attaches a game screenshot and the driver log. Pass `object` to add a screenshot with that
+object outlined, and `hierarchy: true` to add every loaded object as JSON. It never throws: an item it can't collect
+becomes a "not available" note. `attachScreenshot`, `attachHighlightedScreenshot`, `attachHierarchy` and `attachLog`
+attach one item each, at any point in a test.
+
 ## Differences from the other bindings
 
 - Async, and `AltDriver.connect()` instead of a constructor.
@@ -84,6 +107,8 @@ Errors follow the other bindings: `NotFoundException` (and `ObjectNotFound`, `Co
 
 `npm test` runs the unit tests against an in-memory fake server. `npm run test:live` runs against real apps;
 see `test/live/README.md`.
+`npm run test:e2e` runs the sample-game suite (see `test/e2e/README.md`) and writes Allure results; `npm run report`
+turns them into `allure-report/`, and `npm run report:open` opens it.
 
 ## Development
 
