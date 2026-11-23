@@ -315,3 +315,61 @@ describe('AltSocket notifications and close', () => {
     socket.close();
   });
 });
+
+describe('AltSocket heartbeat', () => {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  /** getServerVersion answers during startup, then goes silent. */
+  function silentAfterStartup(server: FakeAltServer): void {
+    let answered = 0;
+    server.on('getServerVersion', () => (answered++ === 0 ? [{ data: '2.3.3' }] : 'silent'));
+  }
+
+  it('a silent ping holds the slot only for heartbeatTimeoutMs, so a user command still gets through', async () => {
+    const server = new FakeAltServer();
+    silentAfterStartup(server);
+    server.on('getAllComponents', () => [{ data: [] }]);
+    const socket = await AltSocket.connect(opts(server, { heartbeatMs: 20, heartbeatTimeoutMs: 15, commandTimeoutMs: 5_000 }));
+    await wait(25); // first ping is on the wire and silent
+    const started = Date.now();
+    await socket.send({ commandName: 'getAllComponents' });
+    expect(Date.now() - started).toBeLessThan(200);
+    socket.close();
+  });
+
+  it('closes as unresponsive after three missed pings in a row', async () => {
+    const server = new FakeAltServer();
+    silentAfterStartup(server);
+    const socket = await AltSocket.connect(opts(server, { heartbeatMs: 10, heartbeatTimeoutMs: 5 }));
+    const closes: string[] = [];
+    socket.onClose((i) => closes.push(i.kind));
+    await wait(150);
+    expect(closes).toEqual(['unresponsive']);
+    expect(server.commandsNamed('getServerVersion').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a ping that answers resets the miss count', async () => {
+    const server = new FakeAltServer();
+    let n = 0;
+    // startup answer, then silent, silent, answer, silent, silent, answer, ...: never three misses in a row
+    server.on('getServerVersion', () => (n++ % 3 === 0 ? [{ data: '2.3.3' }] : 'silent'));
+    const socket = await AltSocket.connect(opts(server, { heartbeatMs: 10, heartbeatTimeoutMs: 5 }));
+    const closes: string[] = [];
+    socket.onClose((i) => closes.push(i.kind));
+    await wait(200);
+    expect(closes).toEqual([]);
+    socket.close();
+  });
+
+  it('does not ping while the app is paused', async () => {
+    const server = new FakeAltServer();
+    silentAfterStartup(server);
+    const socket = await AltSocket.connect(opts(server, { heartbeatMs: 10, heartbeatTimeoutMs: 5 }));
+    server.last().notify('applicationPausedNotification', true);
+    const before = server.commandsNamed('getServerVersion').length;
+    await wait(80);
+    expect(server.commandsNamed('getServerVersion').length).toBe(before);
+    expect(socket.paused).toBe(true);
+    socket.close();
+  });
+});

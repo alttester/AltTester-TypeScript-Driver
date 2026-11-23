@@ -87,7 +87,10 @@ export class AltDriver {
     return this.send('hightlightObjectScreenshot', { altObjectId, color, width, size: SIZE_IGNORED, quality }, { responses: 2 });
   }
 
-  /** Repeated calls at the same point cycle through stacked hits (app-side state). */
+  /**
+   * Repeated calls at the same point cycle through stacked hits (app-side state). So this is sent as an
+   * input command: a retry, or two clicks collapsed into one, would land on the wrong stacked object.
+   */
   hightlightObjectFromCoordinatesScreenshot(
     coordinates: AltVector2,
     color: AltColor = HIGHLIGHT_COLOR,
@@ -98,6 +101,7 @@ export class AltDriver {
       'hightlightObjectFromCoordinatesScreenshot',
       { coordinates, color, width, size: SIZE_IGNORED, quality },
       {
+        kind: 'input',
         responses: 3,
         select: (frames) => {
           const hit = frames[0] as AltObject | null;

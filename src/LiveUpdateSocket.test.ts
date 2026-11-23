@@ -3,7 +3,7 @@ import { FakeAltServer, flush } from '../test/fakeAltServer';
 import type { CloseInfo } from './closeCodes';
 import { FrameUrls, LiveUpdateSocket } from './LiveUpdateSocket';
 
-function setup(server = new FakeAltServer()) {
+function setup(server = new FakeAltServer(), extra: { openTimeoutMs?: number } = {}) {
   const frames: ArrayBuffer[] = [];
   const closes: CloseInfo[] = [];
   const live = new LiveUpdateSocket({
@@ -14,11 +14,33 @@ function setup(server = new FakeAltServer()) {
     WebSocketImpl: server.WebSocket,
     onFrame: (f) => frames.push(f),
     onClose: (i) => closes.push(i),
+    ...extra,
   });
   return { server, live, frames, closes };
 }
 
 describe('LiveUpdateSocket', () => {
+  it('reports unreachable when the socket never opens within openTimeoutMs', async () => {
+    const { closes } = setup(new FakeAltServer({ scheme: 'wss', stallWrongScheme: true }), { openTimeoutMs: 20 });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(closes.map((c) => c.kind)).toEqual(['unreachable']);
+  });
+
+  it('reports notRegistered when the socket opens but the server never registers it', async () => {
+    const { server, closes } = setup(new FakeAltServer({ register: false }), { openTimeoutMs: 20 });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(closes.map((c) => c.kind)).toEqual(['notRegistered']);
+    expect(server.last('/altws/live-update').sent).toEqual([]);
+  });
+
+  it('does not time out once the stream has started', async () => {
+    const { live, closes } = setup(new FakeAltServer(), { openTimeoutMs: 20 });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(live.isStarted).toBe(true);
+    expect(closes).toEqual([]);
+    live.stop();
+  });
+
   it('sends Quality:25, FrameRate:10, Start in that order after driverRegistered, with the app params', async () => {
     const { server, live } = setup();
     await flush(5);

@@ -3,7 +3,7 @@
 // (AltDriverController.cs): one command in flight, FIFO, consecutive duplicate reads collapse,
 // 60 s timeout, reads retried up to twice on timeout, inputs never retried.
 
-import { closedByClient, connectFailed, describeClose, type CloseInfo } from './closeCodes';
+import { appStoppedAnswering, closedByClient, connectFailed, describeClose, type CloseInfo } from './closeCodes';
 import { AltTimeoutError, createAltError, createConnectionError } from './errors';
 import { buildConnectionUrl, type AppSelector, type ServerAddress } from './connectionUrl';
 import { defaultWebSocket, WS_OPEN, type WebSocketCtor, type WebSocketLike } from './socketTypes';
@@ -19,6 +19,11 @@ export interface ConnectOptions extends ServerAddress, AppSelector {
   maxRetries?: number;
   /** Interval for a liveness `getServerVersion` while idle; 0 disables (default). */
   heartbeatMs?: number;
+  /**
+   * How long one liveness ping may hold the command slot (default 5 s, capped at `heartbeatMs`).
+   * After 3 missed pings in a row the socket closes with kind 'unresponsive'.
+   */
+  heartbeatTimeoutMs?: number;
   /** NotificationType values activated after registration (default [0, 1, 3], as Desktop does). */
   startupNotifications?: readonly number[];
   /** Merge a read into an identical read still waiting in the queue (default true). */
@@ -49,6 +54,9 @@ export type NotificationName =
 
 /** NotificationType values for activateNotification (LOADSCENE, UNLOADSCENE, APPLICATION_PAUSED). */
 const STARTUP_NOTIFICATIONS = [0, 1, 3];
+
+/** Missed liveness pings in a row before the socket gives up on the app. */
+const HEARTBEAT_MAX_MISSES = 3;
 
 // Moved to errors.ts; re-exported here for existing imports.
 export { AltConnectionError, AltError, AltTimeoutError } from './errors';
@@ -116,7 +124,10 @@ export class AltSocket {
   private constructor(
     private readonly ws: WebSocketLike,
     private readonly options: Required<
-      Pick<ConnectOptions, 'commandTimeoutMs' | 'maxRetries' | 'startupNotifications' | 'collapseReads' | 'delayAfterCommandMs'>
+      Pick<
+        ConnectOptions,
+        'commandTimeoutMs' | 'maxRetries' | 'startupNotifications' | 'collapseReads' | 'delayAfterCommandMs' | 'heartbeatTimeoutMs'
+      >
     >,
   ) {}
 
@@ -127,6 +138,7 @@ export class AltSocket {
     const ws = new Impl(url);
     const socket = new AltSocket(ws, {
       commandTimeoutMs: opts.commandTimeoutMs ?? 60_000,
+      heartbeatTimeoutMs: opts.heartbeatTimeoutMs ?? 5_000,
       maxRetries: opts.maxRetries ?? 2,
       startupNotifications: opts.startupNotifications ?? STARTUP_NOTIFICATIONS,
       collapseReads: opts.collapseReads ?? true,
@@ -208,8 +220,12 @@ export class AltSocket {
   }
 
   close(): void {
+    this.closeWith(closedByClient());
+  }
+
+  private closeWith(info: CloseInfo): void {
     if (this.closeInfo) return;
-    this.handleClose(closedByClient());
+    this.handleClose(info);
     try {
       this.ws.close(1000);
     } catch {
@@ -303,9 +319,24 @@ export class AltSocket {
   }
 
   private startHeartbeat(ms: number): void {
+    const timeoutMs = Math.min(this.options.heartbeatTimeoutMs, ms);
+    let misses = 0;
+    let pinging = false;
     this.heartbeat = setInterval(() => {
-      if (this.inFlight || this.queue.length) return;
-      this.send({ commandName: 'getServerVersion', kind: 'input' }).catch(() => undefined);
+      if (pinging || this.inFlight || this.queue.length || this._paused) return;
+      pinging = true;
+      this.send({ commandName: 'getServerVersion', kind: 'input', timeoutMs }).then(
+        () => {
+          pinging = false;
+          misses = 0;
+        },
+        (e) => {
+          pinging = false;
+          if (!(e instanceof AltTimeoutError)) return; // closed, or an error reply: the app is alive
+          misses += 1;
+          if (misses >= HEARTBEAT_MAX_MISSES) this.closeWith(appStoppedAnswering());
+        },
+      );
     }, ms);
   }
 

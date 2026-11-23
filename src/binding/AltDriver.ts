@@ -411,7 +411,9 @@ export class AltDriver {
     width = 1,
     quality = 100,
   ): Promise<HighlightedScreenshotAt> {
+    // Never retried: the app cycles through stacked hits at a point, so a repeat selects the next one.
     const frames = await this._sendFrames('hightlightObjectFromCoordinatesScreenshot', { coordinates, color, width, size: { x: 0, y: 0 }, quality }, {
+      input: true,
       responses: 3,
       expect: [undefined, 'Ok'],
     });
