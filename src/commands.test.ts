@@ -320,6 +320,32 @@ describe('AltDriver retries', () => {
     socket.close();
   });
 
+  it('a timed-out select-from-screen is not retried, so it cannot cycle to the next stacked object', async () => {
+    const { server, socket, driver } = await setup('unity', 30);
+    server.on('hightlightObjectFromCoordinatesScreenshot', () => 'silent');
+    const err = await driver.hightlightObjectFromCoordinatesScreenshot({ x: 1, y: 1 }).catch((e) => e);
+    expect(err).toBeInstanceOf(AltTimeoutError);
+    expect(server.commandsNamed('hightlightObjectFromCoordinatesScreenshot')).toHaveLength(1);
+    socket.close();
+  });
+
+  it('two select-from-screen clicks at one point are both sent, not collapsed', async () => {
+    const { server, socket, driver } = await setup();
+    let n = 0;
+    server.on('hightlightObjectFromCoordinatesScreenshot', () => [
+      { data: { name: `Hit${++n}`, id: n } },
+      { data: 'Ok' },
+      { data: { textureSize: { x: 1, y: 1 }, compressedImage: '' } },
+    ]);
+    const [a, b, c] = await Promise.all([
+      driver.hightlightObjectFromCoordinatesScreenshot({ x: 1, y: 1 }),
+      driver.hightlightObjectFromCoordinatesScreenshot({ x: 1, y: 1 }),
+      driver.hightlightObjectFromCoordinatesScreenshot({ x: 1, y: 1 }),
+    ]);
+    expect([a.object?.name, b.object?.name, c.object?.name]).toEqual(['Hit1', 'Hit2', 'Hit3']);
+    socket.close();
+  });
+
   it('a timed-out getAllComponents is retried twice', async () => {
     const { server, socket, driver } = await setup('unity', 30);
     server.on('getAllComponents', () => 'silent');
