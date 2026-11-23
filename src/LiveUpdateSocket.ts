@@ -15,6 +15,11 @@ export interface LiveUpdateOptions extends ServerAddress, AppSelector {
   /** Called with each frame's JPEG bytes. */
   onFrame: (jpeg: ArrayBuffer) => void;
   onClose?: (info: CloseInfo) => void;
+  /**
+   * How long to wait for the socket to open and the server to register this driver (default 5 s).
+   * A host that drops packets, or a wss:// connect to a plain ws server, otherwise never ends.
+   */
+  openTimeoutMs?: number;
 }
 
 export class LiveUpdateSocket {
@@ -22,10 +27,12 @@ export class LiveUpdateSocket {
   private started = false;
   private opened = false;
   private closed = false;
+  private openTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly opts: LiveUpdateOptions) {
     const Impl = opts.WebSocketImpl ?? defaultWebSocket();
     this.ws = new Impl(buildConnectionUrl(opts, '/altws/live-update', opts, opts.driverType));
+    this.openTimer = setTimeout(() => this.openTimedOut(), opts.openTimeoutMs ?? 5_000);
     this.ws.binaryType = 'arraybuffer';
     this.ws.onopen = () => {
       this.opened = true;
@@ -56,6 +63,7 @@ export class LiveUpdateSocket {
 
   /** Stops the stream (only if this client started it) and closes the socket. */
   stop(): void {
+    this.clearOpenTimer();
     if (this.closed) return;
     if (this.started) this.sendText('Stop');
     this.started = false;
@@ -68,6 +76,7 @@ export class LiveUpdateSocket {
   }
 
   private begin(): void {
+    this.clearOpenTimer();
     this.sendText(`Quality:${Math.round(this.opts.quality ?? 25)}`);
     this.sendText(`FrameRate:${Math.round(this.opts.frameRate ?? 10)}`);
     this.sendText('Start');
@@ -83,7 +92,35 @@ export class LiveUpdateSocket {
     }
   }
 
+  private openTimedOut(): void {
+    this.openTimer = null;
+    if (this.closed || this.started) return;
+    const info: CloseInfo = this.opened
+      ? {
+          code: 0,
+          kind: 'notRegistered',
+          message: 'The server is reachable but did not register the live view in time.',
+          serverReason: '',
+        }
+      : connectFailed();
+    this.ws.onopen = null;
+    this.ws.onerror = null;
+    this.ws.onclose = null;
+    try {
+      this.ws.close();
+    } catch {
+      // never opened
+    }
+    this.finish(info);
+  }
+
+  private clearOpenTimer(): void {
+    if (this.openTimer) clearTimeout(this.openTimer);
+    this.openTimer = null;
+  }
+
   private finish(info: CloseInfo): void {
+    this.clearOpenTimer();
     if (this.closed) return;
     this.closed = true;
     this.started = false;
