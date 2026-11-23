@@ -27,7 +27,7 @@ export class AltObject implements AltObjectData {
     data: Partial<AltObjectData> & { iD?: number },
   ) {
     this.name = data.name ?? '';
-    // The Unreal SDK serialises some ids as "iD" (protocol.md correction 15).
+    // The Unreal SDK serialises some ids as "iD".
     this.id = data.id ?? data.iD ?? 0;
     this.x = data.x ?? 0;
     this.y = data.y ?? 0;

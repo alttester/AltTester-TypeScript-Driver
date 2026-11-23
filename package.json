@@ -1,11 +1,15 @@
 {
   "name": "@alttester/driver",
-  "version": "0.2.1",
+  "version": "2.4.0",
   "description": "AltTester(R) driver for TypeScript/JavaScript (Node 22+ and browsers): the binding API plus the low-level protocol client.",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/alttester/AltTester-TypeScript-Driver.git"
+  },
+  "homepage": "https://github.com/alttester/AltTester-TypeScript-Driver#readme",
+  "bugs": {
+    "url": "https://github.com/alttester/AltTester-TypeScript-Driver/issues"
   },
   "keywords": [
     "alttester",
@@ -78,7 +82,8 @@
     "node": ">=22"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
     "build": "tsup",
