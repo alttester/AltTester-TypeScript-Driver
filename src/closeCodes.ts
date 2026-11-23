@@ -119,3 +119,11 @@ export const serverStoppedAnswering = (): CloseInfo => ({
   message: 'The server stopped answering. Check that AltTester® Server is still running, then connect again.',
   serverReason: '',
 });
+
+/** The driver socket is open but the app stopped answering the liveness pings. */
+export const appStoppedAnswering = (): CloseInfo => ({
+  code: 0,
+  kind: 'unresponsive',
+  message: 'The app stopped answering. Check that it is still running, then connect again.',
+  serverReason: '',
+});
