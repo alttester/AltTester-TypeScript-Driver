@@ -1,5 +1,5 @@
 // Typed wrappers for the commands the inspector uses. Method names are the wire commandNames
-// (including the "hightlight" typo). Defaults follow AltTester Desktop; see docs/research/protocol.md.
+// (including the "hightlight" typo). Defaults follow AltTester Desktop.
 
 import { AltError, type AltSocket, type CommandKind } from './AltSocket';
 import { isCommandAvailable, isUnavailable, UNAVAILABLE, type GameEngine, type Unavailable } from './engine';

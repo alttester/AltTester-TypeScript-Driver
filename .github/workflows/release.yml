@@ -1,0 +1,57 @@
+name: Release
+
+# Publishes @alttester/driver to npm when a version tag (v2.4.0, v2.5.0-beta.1, ...) is pushed.
+# It uses npm trusted publishing: npm trusts this workflow file through GitHub's OIDC token, so no npm token is
+# stored in the repository, and the package gets a provenance statement. The trusted publisher is set on
+# npmjs.com (package settings, "Trusted Publisher": GitHub Actions, alttester/AltTester-TypeScript-Driver,
+# workflow release.yml). If this file is renamed, that setting must change too.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write # for the OIDC token that npm trusted publishing exchanges
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later; Node 22 ships with npm 10.
+      - name: Update npm
+        run: npm install -g npm@11
+
+      - name: Check that the tag matches package.json
+        id: version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${version}."
+            exit 1
+          fi
+          case "$version" in
+            *-*) echo "dist_tag=next" >> "$GITHUB_OUTPUT" ;;
+            *) echo "dist_tag=latest" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --access public --tag "${{ steps.version.outputs.dist_tag }}"

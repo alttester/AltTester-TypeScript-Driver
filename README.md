@@ -16,14 +16,12 @@ await driver.stop();
 
 ## Install
 
-This repository is private and the package is not on the public npm registry. Install it from a tag:
-
 ```bash
-npm install "github:alttester/AltTester-TypeScript-Driver#v0.2.1"
+npm install @alttester/driver
 ```
 
-npm builds `dist/` on install (`prepare`). It needs read access to this repository: an SSH key locally, a
-token on CI.
+The driver shares its major and minor version with the AltTester® SDK, so any 2.4.x driver works with any 2.4.x
+Unity SDK. It also connects to Unreal SDK 1.x apps. Patch versions are released independently.
 
 ## Entry points
 
@@ -118,6 +116,16 @@ npm test
 npm run typecheck
 npm run build
 ```
+
+## Releasing
+
+1. Set `version` in `package.json` (and `package-lock.json`) to the new version, for example with
+   `npm version 2.4.1 --no-git-tag-version`, and merge that change to `main`.
+2. Tag the merge commit with the same version prefixed by `v`, and push the tag:
+   `git tag v2.4.1 && git push origin v2.4.1`.
+3. The `Release` workflow checks that the tag matches `package.json`, runs the checks, and publishes to npm
+   through trusted publishing (OIDC), with provenance. No npm token is stored in the repository. A version with a
+   pre-release suffix, such as `2.5.0-beta.1`, is published under the `next` dist-tag instead of `latest`.
 
 ## License
 
