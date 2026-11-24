@@ -23,6 +23,49 @@ npm install @alttester/driver
 The driver shares its major and minor version with the AltTester® SDK, so any 2.4.x driver works with any 2.4.x
 Unity SDK. It also connects to Unreal SDK 1.x apps. Patch versions are released independently.
 
+## Before you start
+
+The driver talks to your game through an AltTester® Server, so a test needs three things:
+
+1. A build of your game with the AltTester® SDK in it: the
+   [Unity SDK](https://alttester.com/docs/sdk/latest/) or the [Unreal SDK](https://alttester.com/docs/unreal-sdk/latest/).
+2. A running AltTester® Server. [AltTester® Desktop](https://alttester.com/docs/desktop/latest/) starts one on port
+   13000 by default, which is also the driver's default.
+3. The game running and connected to that server. Pass its name as `appName` when several apps share one server.
+
+The [Unity SDK get-started guide](https://alttester.com/docs/sdk/latest/pages/get-started.html) covers the first
+two steps.
+
+## A first test
+
+Any test runner works, because the driver is a plain async API. This example uses [Vitest](https://vitest.dev):
+
+```ts
+import { afterAll, beforeAll, expect, test } from 'vitest';
+import { AltDriver, By } from '@alttester/driver';
+
+let driver: AltDriver;
+
+beforeAll(async () => {
+  // connectTimeout is in seconds; connect retries until an app is there.
+  driver = await AltDriver.connect({ host: '127.0.0.1', port: 13000, appName: 'MyGame', connectTimeout: 60 });
+});
+
+afterAll(async () => {
+  await driver?.stop();
+});
+
+test('the play button opens the game scene', async () => {
+  const play = await driver.waitForObject(By.NAME, 'PlayButton');
+  await play.tap();
+  await driver.waitForCurrentSceneToBe('Game');
+  expect(await driver.getCurrentScene()).toBe('Game');
+});
+```
+
+Open one driver per test file and stop it at the end. Each open driver uses one connection of your AltTester®
+licence.
+
 ## Entry points
 
 | Import | What |
@@ -32,10 +75,6 @@ Unity SDK. It also connects to Unreal SDK 1.x apps. Patch versions are released 
 | `@alttester/driver/node` | Node-only helpers: `AltReversePortForwarding` (adb reverse, iproxy) |
 | `@alttester/driver/allure` | Optional: puts AltTester screenshots and the driver log into an Allure report |
 | `@alttester/driver/testing` | The in-memory fake AltServer, for consumers' own tests |
-
-The package was split out of [alttester-web](https://github.com/alttester), the browser-based AltTester
-inspector, with its history. `publishConfig` points at GitHub Packages, so an accidental `npm publish`
-cannot reach the public registry.
 
 ## API
 
